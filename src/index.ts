@@ -11,7 +11,7 @@ import { prisma } from "./config/prisma";
 import { env, IS_PRODUCTION } from "./config/env";
 
 import router from "./routers";
-import { customErrorHandler } from "./middlewares/customErrorHandler";
+import { customErrorHandler } from "./middlewares/error";
 
 const app = express();
 

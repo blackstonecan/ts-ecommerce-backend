@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 
-import Respond from "@/helpers/response/Respond";
-import CustomError from "@/helpers/error/CustomError";
+import Respond from "@/lib/response/Respond";
+import CustomError from "@/lib/error/CustomError";
 
 import { IS_PRODUCTION } from "@/config/env";
 

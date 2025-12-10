@@ -1,5 +1,5 @@
-import Response from "@/helpers/response/Response";
-import CustomError from "@/helpers/error/CustomError";
+import Response from "@/lib/response/Response";
+import CustomError from "@/lib/error/CustomError";
 import { NextFunction } from "express";
 
 const repoErrorHandler = (error: any): Response<never> => {

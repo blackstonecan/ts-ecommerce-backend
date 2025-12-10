@@ -1,4 +1,4 @@
-import CustomError from "@/helpers/error/CustomError";
+import CustomError from "@/lib/error/CustomError";
 
 class Response<T = unknown> {
   success: boolean;
