@@ -1,21 +1,69 @@
-import express, { Request, Response } from "express";
-import cors from "cors";
 import dotenv from "dotenv";
 
 dotenv.config();
 
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
+
+import { prisma } from "./config/prisma";
+import { env, IS_PRODUCTION } from "./config/env";
+
+import router from "./routers";
+import { customErrorHandler } from "./middlewares/customErrorHandler";
+
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-// Middlewares
-app.use(cors());
-app.use(express.json());
+const corsOptions = {
+  origin: "*",
+  credentials: true,
+};
 
-// Health check
-app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "API is running 🚀" });
+app.use(cors(corsOptions));
+
+// Apply security headers
+app.use(helmet());
+
+// Middleware to handle JSON requests
+app.use(express.json({ limit: "20mb" }));
+
+// Middleware to handle URL-encoded requests
+app.use(cookieParser());
+
+// Middleware to handle URL-encoded requests
+app.use("/", router);
+
+// Middleware to handle static files
+app.use(customErrorHandler);
+
+app.listen(env.PORT, () =>
+  console.log(
+    `Server is running on port ${env.PORT} in ${
+      IS_PRODUCTION ? "production" : "development"
+    } mode`
+  )
+);
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("SIGINT received: closing Prisma connection...");
+  await prisma.$disconnect();
+  process.exit(0);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+process.on("SIGTERM", async () => {
+  console.log("SIGTERM received: closing Prisma connection...");
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught Exception:", err);
+  process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  process.exit(1);
 });
