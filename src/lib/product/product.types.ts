@@ -3,10 +3,10 @@ import { ICategory } from "../category/category.types";
 interface IProductItem {
     id: number;
     name: string;
-    mainImageUrl: string;
+    slug: string;
     amountCents: number;
     haveStock: boolean;
-    slug: string;
+    mainImageUrl: string;
 }
 
 interface IProduct extends IProductItem {
