@@ -1,0 +1,244 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Image {
+    id       Int    @id @default(autoincrement())
+    key      String @unique
+    size     Int
+    mimeType String
+
+    createdAt DateTime @default(now())
+
+    categories Category[]
+
+    mainImageForProducts Product[] @relation("ProductMainImage")
+
+    products Product[] @relation("ProductImages")
+}
+
+model Category {
+    id   Int    @id @default(autoincrement())
+    name String @unique
+
+    imageId Int?
+    image   Image? @relation(fields: [imageId], references: [id])
+
+    createdAt DateTime @default(now())
+
+    products Product[]
+}
+
+model Product {
+    id          Int    @id @default(autoincrement())
+    name        String
+    description String
+    amountCents Int
+    stock       Int
+    slug        String @unique
+
+    categoryId Int
+    category   Category @relation(fields: [categoryId], references: [id])
+
+    mainImageId Int?
+    mainImage   Image? @relation("ProductMainImage", fields: [mainImageId], references: [id])
+
+    images     Image[]     @relation("ProductImages")
+    orderItems OrderItem[]
+    cartItems  CartItem[]
+
+    createdAt DateTime @default(now())
+}
+
+model Country {
+    id   Int    @id @default(autoincrement())
+    name String @unique
+    code String @unique
+
+    createdAt DateTime @default(now())
+
+    cities City[]
+}
+
+model City {
+    id   Int    @id @default(autoincrement())
+    name String
+
+    countryId Int
+    country   Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+    createdAt DateTime @default(now())
+
+    districts District[]
+
+    @@unique([countryId, name])
+}
+
+model District {
+    id   Int    @id @default(autoincrement())
+    name String
+
+    cityId Int
+    city   City @relation(fields: [cityId], references: [id], onDelete: Cascade)
+
+    createdAt DateTime @default(now())
+
+    neighbourhoods Neighbourhood[]
+
+    @@unique([cityId, name])
+}
+
+model Neighbourhood {
+    id   Int    @id @default(autoincrement())
+    name String
+
+    districtId Int
+    district   District @relation(fields: [districtId], references: [id], onDelete: Cascade)
+
+    createdAt DateTime @default(now())
+
+    addresses      Address[]
+    orderAddresses OrderAddress[]
+
+    @@unique([districtId, name])
+}
+
+model Address {
+    id Int @id @default(autoincrement())
+
+    userId     String
+    name         String
+    addressLine1 String
+    addressLine2 String?
+    postalCode   String
+
+    neighbourhoodId Int
+    neighbourhood   Neighbourhood @relation(fields: [neighbourhoodId], references: [id], onDelete: Restrict)
+
+    createdAt DateTime @default(now())
+
+    @@unique([userId, name])
+}
+
+enum OrderStatus {
+    PENDING
+    PROCESSING
+    SHIPPED
+    DELIVERED
+    CANCELED
+}
+
+model OrderAddress {
+    id           Int     @id @default(autoincrement())
+    name         String
+    addressLine1 String
+    addressLine2 String?
+    postalCode   String
+
+    neighbourhoodId Int
+    neighbourhood   Neighbourhood @relation(fields: [neighbourhoodId], references: [id])
+
+    orders Order[]
+
+    createdAt DateTime @default(now())
+}
+
+model Order {
+    id          Int         @id @default(autoincrement())
+    amountCents Int
+    status      OrderStatus @default(PENDING)
+
+    userId  String
+    addressId Int
+    address   OrderAddress @relation(fields: [addressId], references: [id], onDelete: Restrict)
+
+    payments Payment[]
+    items    OrderItem[]
+    updates  OrderUpdate[]
+
+    createdAt DateTime @default(now())
+}
+
+model OrderUpdate {
+    id     Int         @id @default(autoincrement())
+    status OrderStatus
+
+    orderId Int
+    order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+    createdAt DateTime @default(now())
+}
+
+model OrderItem {
+    id          Int @id @default(autoincrement())
+    quantity    Int
+    amountCents Int
+
+    orderId Int
+    order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+    productId Int
+    product   Product @relation(fields: [productId], references: [id])
+
+    createdAt DateTime @default(now())
+}
+
+enum PaymentStatus {
+    PENDING
+    REQUIRES_ACTION
+    SUCCEEDED
+    FAILED
+    CANCELED
+    REFUNDED
+}
+
+enum PaymentProvider {
+    STRIPE
+    PAYPAL
+    TEST
+}
+
+model Payment {
+    id      Int   @id @default(autoincrement())
+    orderId Int
+    order   Order @relation(fields: [orderId], references: [id])
+
+    amountCents Int
+    currency    String @default("USD")
+
+    provider          PaymentProvider
+    providerPaymentId String?
+    providerChargeId  String?
+
+    status PaymentStatus @default(PENDING)
+
+    errorCode    String?
+    errorMessage String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @default(now())
+}
+
+model CartItem {
+    id       Int @id @default(autoincrement())
+    quantity Int
+
+    userId String
+
+    productId Int
+    product   Product @relation(fields: [productId], references: [id])
+
+    createdAt DateTime @default(now())
+
+    @@unique([userId, productId])
+}
