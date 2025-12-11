@@ -1,4 +1,5 @@
-import router from "./category.router";
+import router, { adminRouter } from "./category.router";
 export {
-    router as categoryRouter
+    router as categoryRouter,
+    adminRouter as categoryAdminRouter
 }
