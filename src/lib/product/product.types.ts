@@ -15,7 +15,18 @@ interface IProduct extends IProductItem {
     category: ICategory;
 }
 
+interface IProductForAdmin extends IProductItem {
+    stock: number;
+    images: {
+        id: number;
+        url: string;
+    }[];
+    category: ICategory;
+    description: string;
+}
+
 export {
     IProductItem,
-    IProduct
+    IProduct,
+    IProductForAdmin
 };

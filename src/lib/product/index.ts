@@ -1,4 +1,5 @@
-import router from "./product.router";
+import router, { adminRouter } from "./product.router";
 export {
-    router as productRouter
+    router as productRouter,
+    adminRouter as productAdminRouter
 }

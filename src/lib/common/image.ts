@@ -1,6 +1,6 @@
 import sharp from "sharp";
-import Response from "../response/Response";
-import { errorHandler } from "../error/errorHandler";
+import Response from "@/lib/response/Response";
+import { errorHandler } from "@/lib/error/errorHandler";
 
 export type EncodeResult = {
   buffer: Buffer;

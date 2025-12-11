@@ -8,7 +8,12 @@ const GetProductSchema = z.object({
     slug: z.string().min(1, 'Slug is required')
 });
 
+const GetProductForAdminSchema = z.object({
+    id: z.string().regex(/^\d+$/, 'Category ID must be a number').transform(Number)
+});
+
 export {
     GetProductsSchema,
-    GetProductSchema
+    GetProductSchema,
+    GetProductForAdminSchema
 };
