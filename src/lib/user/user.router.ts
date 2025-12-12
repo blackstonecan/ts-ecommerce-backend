@@ -1,10 +1,15 @@
 import express, { Router } from 'express';
-import { getUserAddressesHandler } from '../address/address.controller';
+
+import { addressUserRouter } from '../address';
+
 import { getMeHandler } from './user.controller';
 
 const router: Router = express.Router();
 
-router.get('/addresses', getUserAddressesHandler);
+// User routes
 router.get('/me', getMeHandler);
+
+// Address routes
+router.use('/address', addressUserRouter);
 
 export default router;

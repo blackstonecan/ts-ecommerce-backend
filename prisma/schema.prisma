@@ -148,7 +148,7 @@ model OrderAddress {
     postalCode   String
 
     neighbourhoodId Int
-    neighbourhood   Neighbourhood @relation(fields: [neighbourhoodId], references: [id])
+    neighbourhood   Neighbourhood @relation(fields: [neighbourhoodId], references: [id], onDelete: Restrict)
 
     orders Order[]
 

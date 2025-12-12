@@ -1,4 +1,5 @@
-import router from "./location.router";
+import router, { adminRouter } from "./location.router";
 export {
-    router as locationRouter
+    router as locationRouter,
+    adminRouter as locationAdminRouter
 }

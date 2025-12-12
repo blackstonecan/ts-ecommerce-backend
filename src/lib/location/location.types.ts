@@ -5,7 +5,7 @@ interface ICountry {
 }
 
 interface ICountryExtended extends ICountry {
-    cities: ICity[];
+    cities: ICityExtended[];
 }
 
 interface ICity {
@@ -14,7 +14,7 @@ interface ICity {
 }
 
 interface ICityExtended extends ICity {
-    districts: IDistrict[];
+    districts: IDistrictExtended[];
 }
 
 interface IDistrict {
