@@ -71,7 +71,7 @@ A production-ready, fully-tested RESTful API for an e-commerce platform built wi
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/ts-ecommerce-backend.git
+git clone https://github.com/blackstonecan/ts-ecommerce-backend.git
 cd ts-ecommerce-backend
 ```
 
@@ -349,9 +349,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Contact
 
-Your Name - [@yourtwitter](https://twitter.com/yourtwitter)
+Emre Can Karataş - emrecankkaratas@gmail.com
 
-Project Link: [https://github.com/yourusername/ts-ecommerce-backend](https://github.com/yourusername/ts-ecommerce-backend)
+Project Link: [https://github.com/blackstonecan/ts-ecommerce-backend](https://github.com/blackstonecan/ts-ecommerce-backend)
 
 ---
 
