@@ -11,7 +11,10 @@ import { prisma } from "./config/prisma";
 import { env, IS_PRODUCTION } from "./config/env";
 
 import router from "./routers";
+import { stripeRouter } from "./lib/stripe";
+
 import { customErrorHandler } from "./middlewares/error";
+import { initCronJobs } from "./jobs/cron";
 
 const app = express();
 
@@ -25,6 +28,8 @@ app.use(cors(corsOptions));
 // Apply security headers
 app.use(helmet());
 
+app.use('/stripe', stripeRouter); 
+
 // Middleware to handle JSON requests
 app.use(express.json({ limit: "20mb" }));
 
@@ -36,6 +41,8 @@ app.use("/", router);
 
 // Middleware to handle static files
 app.use(customErrorHandler);
+
+initCronJobs();
 
 app.listen(env.PORT, () =>
   console.log(

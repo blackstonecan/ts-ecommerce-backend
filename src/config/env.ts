@@ -10,6 +10,9 @@ const envSchema = z.object({
     AWS_S3_BUCKET: z.string(),
     AWS_ACCESS_KEY_ID: z.string(),
     AWS_SECRET_ACCESS_KEY: z.string(),
+
+    STRIPE_SECRET_KEY: z.string(),
+    STRIPE_WEBHOOK_SECRET: z.string(),
 });
 
 export const env = envSchema.parse(process.env);
