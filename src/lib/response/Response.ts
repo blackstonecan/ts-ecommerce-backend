@@ -15,16 +15,16 @@ class Response<T = unknown> {
     return new Response<T>(true, data, null);
   }
 
-  static getError(err: Error, status?: number): Response<never> {
-    return new Response<never>(false, null, new CustomError(err, status));
+  static getError(err: Error, status?: number): Response<any> {
+    return new Response<any>(false, null, new CustomError(err, status));
   }
 
-  static getCustomError(err: CustomError): Response<never> {
-    return new Response<never>(false, null, err);
+  static getCustomError(err: CustomError): Response<any> {
+    return new Response<any>(false, null, err);
   }
 
-  static getMessageError(message: string, status?: number): Response<never> {
-    return new Response<never>(false, null, CustomError.getWithMessage(message, status));
+  static getMessageError(message: string, status?: number): Response<any> {
+    return new Response<any>(false, null, CustomError.getWithMessage(message, status));
   }
 }
 

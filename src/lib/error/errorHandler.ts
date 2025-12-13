@@ -2,7 +2,7 @@ import Response from "@/lib/response/Response";
 import CustomError from "@/lib/error/CustomError";
 import { NextFunction } from "express";
 
-const repoErrorHandler = (error: any): Response<never> => {
+const repoErrorHandler = (error: any): Response<any> => {
     if (error instanceof CustomError) {
         return Response.getCustomError(error);
     }
@@ -27,7 +27,7 @@ const repoErrorHandler = (error: any): Response<never> => {
     return Response.getError(error);
 }
 
-const errorHandler = (error: any): Response<never> => {
+const errorHandler = (error: any): Response<any> => {
     if (error instanceof CustomError) {
         return Response.getCustomError(error);
     }
