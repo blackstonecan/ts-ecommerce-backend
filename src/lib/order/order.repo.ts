@@ -5,12 +5,14 @@ import { repoErrorHandler } from "@/lib/error/errorHandler";
 import CustomError from "@/lib/error/CustomError";
 import { IOrder, IOrderListItem } from "./order.types";
 import { OrderStatus, PaymentProvider, PaymentStatus } from "@/generated/prisma/enums";
+import { logger } from "@/lib/common/logger";
 
 export const orderRepo = {
     async createOrder(
         userId: string,
         addressId: number,
         paymentIntentId: string,
+        expectedAmountCents: number,
         db: PrismaClient = prisma
     ): Promise<Response<{ orderId: number }>> {
         try {
@@ -54,21 +56,31 @@ export const orderRepo = {
                 throw CustomError.getWithMessage('Unauthorized: Address does not belong to user', 403);
             }
 
-            // Pre-validation: Check stock before starting transaction (optimization)
-            for (const item of cartItems) {
-                if (item.product.stock < item.quantity) {
-                    throw CustomError.getWithMessage(
-                        `Insufficient stock for product: ${item.product.name}`,
-                        400
-                    );
-                }
-            }
-
             // Calculate total
             const totalAmountCents = cartItems.reduce(
                 (sum, item) => sum + item.product.amountCents * item.quantity,
                 0
             );
+
+            // Validate amount matches what was used for PaymentIntent
+            if (totalAmountCents !== expectedAmountCents) {
+                logger.error('Amount mismatch between PaymentIntent and Order', {
+                    expected: expectedAmountCents,
+                    calculated: totalAmountCents,
+                    userId
+                });
+                throw CustomError.getWithMessage(
+                    'Cart was modified during checkout. Please try again.',
+                    400
+                );
+            }
+
+            logger.info('Creating order', {
+                userId,
+                addressId,
+                totalAmountCents,
+                itemCount: cartItems.length
+            });
 
             // Create order in transaction
             const result = await db.$transaction(async (tx) => {
@@ -93,6 +105,14 @@ export const orderRepo = {
                     }
                 });
 
+                // Create initial OrderUpdate record for status tracking
+                await tx.orderUpdate.create({
+                    data: {
+                        orderId: order.id,
+                        status: OrderStatus.PENDING
+                    }
+                });
+
                 // Create OrderItems AND Reserve Stock
                 for (const item of cartItems) {
                     await tx.orderItem.create({
@@ -104,8 +124,7 @@ export const orderRepo = {
                         }
                     });
 
-                    // STRATEGY A: Decrement stock immediately (Reservation)
-                    // We use updateMany with 'stock: { gte: quantity }' to ensure concurrency safety.
+                    // Reserve stock atomically - ensures concurrency safety
                     const updateResult = await tx.product.updateMany({
                         where: {
                             id: item.productId,
@@ -116,13 +135,26 @@ export const orderRepo = {
                         }
                     });
 
-                    // If updateCount is 0, it means someone else bought the last item milliseconds ago
+                    // If updateCount is 0, stock was sold between cart fetch and now
                     if (updateResult.count === 0) {
+                        logger.warn('Stock reservation failed - race condition', {
+                            productId: item.productId,
+                            productName: item.product.name,
+                            requestedQuantity: item.quantity,
+                            userId
+                        });
+
                         throw CustomError.getWithMessage(
-                            `Insufficient stock for product: ${item.product.name} (Race Condition)`,
+                            `Insufficient stock for product: ${item.product.name}`,
                             400
                         );
                     }
+
+                    logger.debug('Stock reserved', {
+                        productId: item.productId,
+                        quantity: item.quantity,
+                        orderId: order.id
+                    });
                 }
 
                 // Create Payment record
@@ -137,6 +169,13 @@ export const orderRepo = {
                     }
                 });
 
+                logger.info('Order created successfully', {
+                    orderId: order.id,
+                    userId,
+                    amountCents: totalAmountCents,
+                    paymentIntentId
+                });
+
                 return { orderId: order.id };
             });
 
@@ -148,6 +187,8 @@ export const orderRepo = {
 
     async confirmOrder(orderId: number, db: PrismaClient = prisma): Promise<Response<null>> {
         try {
+            logger.info('Confirming order', { orderId });
+
             await db.$transaction(async (tx) => {
                 const order = await tx.order.findUnique({
                     where: { id: orderId },
@@ -155,6 +196,7 @@ export const orderRepo = {
                         id: true,
                         status: true,
                         userId: true,
+                        amountCents: true,
                         payments: { select: { id: true, status: true } },
                     },
                 });
@@ -165,14 +207,32 @@ export const orderRepo = {
                 const payment = order.payments[0];
 
                 // Idempotency: already succeeded or not pending => do nothing
-                if (payment.status === PaymentStatus.SUCCEEDED || order.status !== OrderStatus.PENDING) return;
+                if (payment.status === PaymentStatus.SUCCEEDED || order.status !== OrderStatus.PENDING) {
+                    logger.debug('Order already confirmed or not pending', {
+                        orderId,
+                        currentStatus: order.status,
+                        paymentStatus: payment.status
+                    });
+                    return;
+                }
 
                 // Move order forward
                 const updated = await tx.order.updateMany({
                     where: { id: orderId, status: OrderStatus.PENDING },
                     data: { status: OrderStatus.PROCESSING },
                 });
-                if (updated.count === 0) return;
+                if (updated.count === 0) {
+                    logger.warn('Order status update failed - concurrent modification', { orderId });
+                    return;
+                }
+
+                // Create OrderUpdate record for audit trail
+                await tx.orderUpdate.create({
+                    data: {
+                        orderId: orderId,
+                        status: OrderStatus.PROCESSING
+                    }
+                });
 
                 // Mark payment succeeded
                 await tx.payment.update({
@@ -182,6 +242,12 @@ export const orderRepo = {
 
                 // Clear cart
                 await tx.cartItem.deleteMany({ where: { userId: order.userId } });
+
+                logger.info('Order confirmed successfully', {
+                    orderId,
+                    userId: order.userId,
+                    amountCents: order.amountCents
+                });
             });
 
             return Response.getSuccess(null);
@@ -197,12 +263,15 @@ export const orderRepo = {
         db: PrismaClient = prisma
     ): Promise<Response<null>> {
         try {
+            logger.info('Failing order', { orderId, errorMessage });
+
             await db.$transaction(async (tx) => {
                 const order = await tx.order.findUnique({
                     where: { id: orderId },
                     select: {
                         id: true,
                         status: true,
+                        userId: true,
                         items: { select: { productId: true, quantity: true } },
                         payments: { select: { id: true, status: true } },
                     },
@@ -214,31 +283,74 @@ export const orderRepo = {
                 const payment = order.payments[0];
 
                 // If already succeeded, don't cancel
-                if (payment.status === PaymentStatus.SUCCEEDED) return;
+                if (payment.status === PaymentStatus.SUCCEEDED) {
+                    logger.warn('Cannot fail order - payment already succeeded', {
+                        orderId,
+                        paymentStatus: payment.status
+                    });
+                    return;
+                }
 
                 // Idempotency: already canceled/failed => do nothing
-                if (order.status === OrderStatus.CANCELED && payment.status === PaymentStatus.FAILED) return;
+                if (order.status === OrderStatus.CANCELED && payment.status === PaymentStatus.FAILED) {
+                    logger.debug('Order already failed', { orderId });
+                    return;
+                }
 
-                // Only cancel if still PENDING (reservation exists only for PENDING in your flow)
+                // Only cancel if still PENDING (reservation exists only for PENDING)
                 const updated = await tx.order.updateMany({
                     where: { id: orderId, status: OrderStatus.PENDING },
                     data: { status: OrderStatus.CANCELED },
                 });
 
-                if (updated.count === 0) return;
+                if (updated.count === 0) {
+                    logger.warn('Order cancellation skipped - not in PENDING status', {
+                        orderId,
+                        currentStatus: order.status
+                    });
+                    return;
+                }
 
-                // Release reserved stock
+                // Create OrderUpdate record for audit trail
+                await tx.orderUpdate.create({
+                    data: {
+                        orderId: orderId,
+                        status: OrderStatus.CANCELED
+                    }
+                });
+
+                // Release reserved stock - use updateMany for product deletion protection
                 for (const item of order.items) {
-                    await tx.product.update({
+                    const stockReleased = await tx.product.updateMany({
                         where: { id: item.productId },
                         data: { stock: { increment: item.quantity } },
                     });
+
+                    if (stockReleased.count === 0) {
+                        logger.warn('Could not release stock - product may have been deleted', {
+                            orderId,
+                            productId: item.productId,
+                            quantity: item.quantity
+                        });
+                    } else {
+                        logger.debug('Stock released', {
+                            orderId,
+                            productId: item.productId,
+                            quantity: item.quantity
+                        });
+                    }
                 }
 
                 // Mark payment failed
                 await tx.payment.update({
                     where: { id: payment.id },
                     data: { status: PaymentStatus.FAILED, errorMessage: errorMessage },
+                });
+
+                logger.info('Order failed successfully', {
+                    orderId,
+                    userId: order.userId,
+                    errorMessage
                 });
             });
 
@@ -264,18 +376,42 @@ export const orderRepo = {
                 select: { id: true }
             });
 
-            let processedCount = 0;
-
-            // Reuse failOrder logic to ensure stock is released safely
-            for (const order of expiredOrders) {
-                // Calling failOrder internaly handles the transaction and stock increment
-                // We access the failOrder on 'this' object or call the exported function directly if context binding issues arise
-                const result = await orderRepo.failOrder(order.id, 'Session Timeout', db);
-
-                if (result.success) {
-                    processedCount++;
-                } else throw result.error;
+            if (expiredOrders.length === 0) {
+                logger.debug('No expired orders to release');
+                return Response.getSuccess(0);
             }
+
+            logger.info('Releasing expired orders', {
+                count: expiredOrders.length,
+                expirationMinutes
+            });
+
+            // Process orders in parallel for better performance
+            const results = await Promise.allSettled(
+                expiredOrders.map(order => orderRepo.failOrder(order.id, 'Session Timeout', db))
+            );
+
+            // Count successful releases
+            const processedCount = results.filter(result =>
+                result.status === 'fulfilled' && result.value.success
+            ).length;
+
+            // Log any failures
+            const failures = results.filter(result =>
+                result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.success)
+            );
+
+            if (failures.length > 0) {
+                logger.error('Some expired orders failed to release', {
+                    failureCount: failures.length,
+                    successCount: processedCount
+                });
+            }
+
+            logger.info('Expired orders released', {
+                processed: processedCount,
+                failed: failures.length
+            });
 
             return Response.getSuccess(processedCount);
         } catch (error: any) {
